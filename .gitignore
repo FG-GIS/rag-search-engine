@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+#Config files
+pyrightconfig.json
+
 # Folders
 /data/
 
