@@ -11,6 +11,8 @@ pyrightconfig.json
 
 # Folders
 /data/
+/cache/
 
 # Virtual environments
 .venv
+uv.lock

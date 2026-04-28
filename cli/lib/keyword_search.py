@@ -6,14 +6,17 @@ def search_command(query:str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
     movies = load_movies()
     results = []
     for movie in movies:
-        prep_query = stem_words(remove_stop_words(tokenize_text(preprocess_text(query))))
-        prep_title = stem_words(remove_stop_words(tokenize_text(preprocess_text(movie["title"]))))
+        prep_query = process_text(query)
+        prep_title = process_text(movie["title"])
         if has_matching_token(prep_query,prep_title):
             results.append(movie)
             if len(results)>= limit:
                 break
             
     return  results
+
+def process_text(text:str) -> list[str]:
+    return stem_words(remove_stop_words(tokenize_text(preprocess_text(text))))
 
 def preprocess_text(text: str) -> str:
     text = text.lower()
