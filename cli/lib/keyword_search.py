@@ -1,7 +1,7 @@
 import string
 import pickle
 import os
-from typing import Any
+from typing import Any, Counter
 from .search_utils import DEFAULT_SEARCH_LIMIT, CACHE_DIR, load_movies, load_stop_words
 from nltk.stem import PorterStemmer
 
@@ -58,10 +58,15 @@ class InvertedIndex:
         self.docmap: dict[int,Any] = {}
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
+        self.term_frequency_path = os.path.join(CACHE_DIR, "term_frequency.pkl")
+        self.term_frequency: dict[int, Counter] = {}
 
     def __add_document(self, doc_id:int, text:str) -> None:
         tokens = process_text(text)
         for t in tokens:
+            if doc_id not in self.term_frequency:
+                self.term_frequency[doc_id] = Counter()
+            self.term_frequency[doc_id][t] += 1
             if t not in self.index:
                 self.index[t] = set()
             self.index[t].add(doc_id)
@@ -71,6 +76,12 @@ class InvertedIndex:
         if term not in self.index:
             return []
         return sorted(self.index[term])
+
+    def get_tf(self, doc_id: int, term: str) -> int:
+        token = process_text(term)
+        if len(token) > 1:
+            raise Exception("Too many tokens.")
+        return self.term_frequency[doc_id][token[0]]
 
     def build(self) -> None:
         movies = load_movies()
@@ -84,9 +95,13 @@ class InvertedIndex:
             pickle.dump(self.index,f)
         with open(self.docmap_path,"wb") as f:
             pickle.dump(self.docmap,f)
+        with open(self.term_frequency_path,"wb") as f:
+            pickle.dump(self.term_frequency,f)
 
     def load(self) -> None:
         with open(self.index_path, "rb") as f:
             self.index = pickle.load(f)
         with open(self.docmap_path, "rb") as f:
             self.docmap = pickle.load(f)
+        with open(self.term_frequency_path, "rb") as f:
+            self.term_frequency = pickle.load(f)
