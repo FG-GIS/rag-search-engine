@@ -32,16 +32,17 @@ def preprocess_text(text: str) -> str:
     return text
 
 def tokenize_text(text:str) -> list[str]:
-    output = text.split(" ")
+    output = text.split()
     output = [item for item in output if item.strip()]
     return output
 
 def remove_stop_words(t_list:list[str]) -> list[str]:
     stop_words = load_stop_words()
-    for w in stop_words:
-        if w in t_list:
-            t_list.remove(w)
-    return t_list
+    filtered = [token for token in t_list if token not in stop_words]
+    # for w in stop_words:
+    #     if w in t_list:
+    #         t_list.remove(w)
+    return filtered
 
 def stem_words(list: list[str]) -> list[str]:
     result = []
@@ -63,7 +64,7 @@ class InvertedIndex:
 
     def __add_document(self, doc_id:int, text:str) -> None:
         tokens = process_text(text)
-        for t in tokens:
+        for t in set(tokens):
             if doc_id not in self.term_frequency:
                 self.term_frequency[doc_id] = Counter()
             self.term_frequency[doc_id][t] += 1
@@ -72,7 +73,7 @@ class InvertedIndex:
             self.index[t].add(doc_id)
 
     def get_documents(self, term:str) -> list[int]:
-        term = term.lower()
+        term = process_text(term)[0]
         if term not in self.index:
             return []
         return sorted(self.index[term])

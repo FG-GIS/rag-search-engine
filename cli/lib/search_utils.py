@@ -18,5 +18,6 @@ def load_movies() -> list[dict]:
 
 def load_stop_words() -> list[str]:
     with open(STOP_WORDS_PATH, "r") as f:
-        data = f.read()
-    return data.splitlines()
+        return [line.strip() for line in f if line.strip()]
+    #     data = f.read()
+    # return data.splitlines()
