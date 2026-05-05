@@ -1,4 +1,5 @@
 import string
+import math
 import pickle
 import os
 from typing import Any, Counter
@@ -39,9 +40,6 @@ def tokenize_text(text:str) -> list[str]:
 def remove_stop_words(t_list:list[str]) -> list[str]:
     stop_words = load_stop_words()
     filtered = [token for token in t_list if token not in stop_words]
-    # for w in stop_words:
-    #     if w in t_list:
-    #         t_list.remove(w)
     return filtered
 
 def stem_words(list: list[str]) -> list[str]:
@@ -64,7 +62,7 @@ class InvertedIndex:
 
     def __add_document(self, doc_id:int, text:str) -> None:
         tokens = process_text(text)
-        for t in set(tokens):
+        for t in tokens:
             if doc_id not in self.term_frequency:
                 self.term_frequency[doc_id] = Counter()
             self.term_frequency[doc_id][t] += 1
@@ -83,6 +81,10 @@ class InvertedIndex:
         if len(token) > 1:
             raise Exception("Too many tokens.")
         return self.term_frequency[doc_id][token[0]]
+
+    def get_idf(self, term: str) -> float:
+        return math.log((len(self.docmap) + 1) / (len(self.get_documents(term)) + 1))
+
 
     def build(self) -> None:
         movies = load_movies()
