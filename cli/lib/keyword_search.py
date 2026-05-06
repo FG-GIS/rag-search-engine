@@ -49,6 +49,10 @@ def stem_words(list: list[str]) -> list[str]:
         result.append(stemmer.stem(item))
     return result
 
+def bm25_idf_command(term: str) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_bm25_idf(term)
 
 class InvertedIndex:
 
@@ -79,11 +83,22 @@ class InvertedIndex:
     def get_tf(self, doc_id: int, term: str) -> int:
         token = process_text(term)
         if len(token) > 1:
-            raise Exception("Too many tokens.")
+            raise ValueError("Term must be a single token.")
         return self.term_frequency[doc_id][token[0]]
 
     def get_idf(self, term: str) -> float:
-        return math.log((len(self.docmap) + 1) / (len(self.get_documents(term)) + 1))
+        token = process_text(term)
+        if len(token) > 1:
+            raise ValueError("Term must be a single token.")
+        return math.log((len(self.docmap) + 1) / (len(self.get_documents(token[0])) + 1))
+
+    def get_bm25_idf(self, term: str) -> float:
+        token = process_text(term)
+        if len(token) > 1:
+                raise ValueError("Term must be a single token.")
+        df = len(self.get_documents(token[0]))
+        N = len(self.docmap)
+        return math.log((N - df + 0.5) / (df + 0.5) + 1)
 
 
     def build(self) -> None:
@@ -108,3 +123,4 @@ class InvertedIndex:
             self.docmap = pickle.load(f)
         with open(self.term_frequency_path, "rb") as f:
             self.term_frequency = pickle.load(f)
+
