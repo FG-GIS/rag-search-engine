@@ -3,7 +3,7 @@ import math
 import pickle
 import os
 from typing import Any, Counter
-from .search_utils import DEFAULT_SEARCH_LIMIT, CACHE_DIR, load_movies, load_stop_words
+from .search_utils import DEFAULT_SEARCH_LIMIT, CACHE_DIR, load_movies, load_stop_words, BM25_K1
 from nltk.stem import PorterStemmer
 
 def search_command(query:str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
@@ -54,6 +54,11 @@ def bm25_idf_command(term: str) -> float:
     idx.load()
     return idx.get_bm25_idf(term)
 
+def bm25_tf_command(doc_id:int, term:str, k1:float = BM25_K1) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_bm25_tf(doc_id, term, k1)
+
 class InvertedIndex:
 
     def __init__(self) -> None:
@@ -100,6 +105,12 @@ class InvertedIndex:
         N = len(self.docmap)
         return math.log((N - df + 0.5) / (df + 0.5) + 1)
 
+    def get_bm25_tf(self, doc_id:int, term:str, k1:float = BM25_K1) -> float:
+        token = process_text(term)
+        if len(token) > 1:
+            raise ValueError("Term must be a single token.")
+        tf = self.get_tf(doc_id, token[0])
+        return (tf * (k1 +1)) / (tf + k1)
 
     def build(self) -> None:
         movies = load_movies()
