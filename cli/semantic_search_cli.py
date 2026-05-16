@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from lib.semantic_search import verify_model,embed_text,verify_embeddings,embed_query_text
+from lib.semantic_search import SemanticSearch, verify_model,embed_text,verify_embeddings,embed_query_text,load_movies
 
 import argparse
 
@@ -17,6 +17,10 @@ def main():
     embed_query_parser = subparsers.add_parser("embed_query", help="Embed the given text and print out data.")
     embed_query_parser.add_argument("query", type=str, help="Query to embed")
 
+    search_parser = subparsers.add_parser("search", help="Search the given query within the database")
+    search_parser.add_argument("query", type=str, help="Query to search by")
+    search_parser.add_argument("--limit", type=int, default=5, help="Number of search outputs")
+
     args = parser.parse_args()
 
     match args.command:
@@ -28,6 +32,12 @@ def main():
             embed_query_text(args.query)
         case "verify_embeddings":
             verify_embeddings()
+        case "search":
+            sem = SemanticSearch()
+            sem.load_or_create_embeddings(load_movies())
+            out = sem.search(args.query,args.limit)
+            for i,item in enumerate(out):
+                print(f"{i}. {item['title']} ({item['score']})\n{item['description']}")
         case _:
             parser.print_help()
 

@@ -32,13 +32,22 @@ def embed_query_text(query:str) -> None:
     print(f"First 3 dimensions: {embedding[:3]}")
     print(f"Shape: {embedding.shape}")
 
+def cosine_similarity(vec1, vec2):
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
 
 class SemanticSearch:
     def __init__(self) ->None:
         self.model: SentenceTransformer = SentenceTransformer('all-MiniLM-L6-v2')
         self.embeddings = None
-        self.documents = None
-        self.document_map: dict[int,Any] = {}
+        self.documents:list[dict[str,Any]] = []
+        self.document_map: dict[Any,Any] = {}
         self.embeddings_path = os.path.join(CACHE_DIR, "movie_embeddings.npy")
 
     def generate_embedding(self, text:str):
@@ -73,3 +82,20 @@ class SemanticSearch:
 
         return self.build_embeddings(documents)
 
+    def search(self, query:str, limit:int):
+        if self.embeddings is None:
+            raise ValueError("No embeddings loaded. Call `load_or_create_embeddings` first.")
+
+        query_embedding = self.generate_embedding(query)
+        scores = []
+        for i,e in enumerate(self.embeddings):
+            sim_score = cosine_similarity(query_embedding,e)
+            scores.append((sim_score,self.documents[i]))
+
+        scores = sorted(scores,key=lambda item: item[0], reverse=True)
+
+        out = []
+        for item in scores[:limit]:
+            out.append({"score":item[0],"title":item[1]["title"],"description":item[1]["description"]})
+
+        return out
