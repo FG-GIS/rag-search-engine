@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from lib.semantic_search import SemanticSearch, verify_model,embed_text,verify_embeddings,embed_query_text,load_movies
+from lib.semantic_search import SemanticSearch, verify_model,embed_text,verify_embeddings,embed_query_text,load_movies,fixed_chunker
 
 import argparse
 
@@ -21,6 +21,11 @@ def main():
     search_parser.add_argument("query", type=str, help="Query to search by")
     search_parser.add_argument("--limit", type=int, default=5, help="Number of search outputs")
 
+    chunk_parser = subparsers.add_parser("chunk", help="Fixed-size chunking for the given text at given or default size")
+    chunk_parser.add_argument("text", type=str, help="Text to chunk")
+    chunk_parser.add_argument("--chunk-size", type=int, default=200, help="Default chunking size")
+    chunk_parser.add_argument("--overlap", type=int, default=0, help="Default chunk overlap")
+
     args = parser.parse_args()
 
     match args.command:
@@ -38,6 +43,12 @@ def main():
             out = sem.search(args.query,args.limit)
             for i,item in enumerate(out):
                 print(f"{i}. {item['title']} ({item['score']})\n{item['description']}")
+        case "chunk":
+            chunks = fixed_chunker(args.text,args.chunk_size,args.overlap)
+            print(f"Chunking {len(args.text)} characters")
+            for i,c in enumerate(chunks):
+                print(f"{i+1}. {c}")
+
         case _:
             parser.print_help()
 

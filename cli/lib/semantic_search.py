@@ -42,6 +42,16 @@ def cosine_similarity(vec1, vec2):
 
     return dot_product / (norm1 * norm2)
 
+def fixed_chunker(text:str,size:int,overlap:int) -> list[str]:
+    if size == 0 or size - overlap <= 0:
+        raise ValueError("Size or overlap value error.")
+    tokens = text.split()
+    sub_chunks = [tokens[i:i+size] for i in range(0, len(tokens),size - overlap)]
+    if len(sub_chunks[len(sub_chunks)-1]) == overlap:
+        sub_chunks = sub_chunks[:-1]
+    out = [' '.join(sub_chunks[i]) for i in range(len(sub_chunks))]
+    return out
+
 class SemanticSearch:
     def __init__(self) ->None:
         self.model: SentenceTransformer = SentenceTransformer('all-MiniLM-L6-v2')
