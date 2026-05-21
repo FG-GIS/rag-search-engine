@@ -1,10 +1,9 @@
-from .search_utils import CACHE_DIR,load_movies
-import os
+from .search_utils import CACHE_DIR, format_search_result,load_movies
+import re,json,os
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from typing import Any
 
-from torch import Tensor
 
 def verify_model() -> None:
     sem_search = SemanticSearch()
@@ -42,19 +41,30 @@ def cosine_similarity(vec1, vec2):
 
     return dot_product / (norm1 * norm2)
 
-def fixed_chunker(text:str,size:int,overlap:int) -> list[str]:
+def chunker(text:str,size:int,overlap:int,semantic_flag:bool = False) -> list[str]:
     if size == 0 or size - overlap <= 0:
         raise ValueError("Size or overlap value error.")
-    tokens = text.split()
+    if semantic_flag:
+        tokens = re.split(r"(?<=[.!?])\s+",text)
+    else:
+        tokens = text.split()
     sub_chunks = [tokens[i:i+size] for i in range(0, len(tokens),size - overlap)]
     if len(sub_chunks[len(sub_chunks)-1]) == overlap:
         sub_chunks = sub_chunks[:-1]
     out = [' '.join(sub_chunks[i]) for i in range(len(sub_chunks))]
     return out
 
+def chunk_printer(text:str,chunks:list[str],sem_flag:bool = False):
+    if sem_flag:
+        print(f"Semantically chunking {len(text)} characters")
+    else:
+        print(f"Chunking {len(text)} characters")
+    for i,c in enumerate(chunks):
+        print(f"{i+1}. {c}")
+
 class SemanticSearch:
-    def __init__(self) ->None:
-        self.model: SentenceTransformer = SentenceTransformer('all-MiniLM-L6-v2')
+    def __init__(self, model_name="all-MiniLM-L6-v2") ->None:
+        self.model: SentenceTransformer = SentenceTransformer(model_name)
         self.embeddings = None
         self.documents:list[dict[str,Any]] = []
         self.document_map: dict[Any,Any] = {}
@@ -67,7 +77,7 @@ class SemanticSearch:
         emb = self.model.encode([text])
         return emb[0]
 
-    def build_embeddings(self, documents:list[dict[str,Any]]) -> Tensor:
+    def build_embeddings(self, documents:list[dict[str,Any]]):
         self.documents = documents
         movies = []
         for doc in documents:
@@ -78,7 +88,7 @@ class SemanticSearch:
             np.save(f,self.embeddings)
         return self.embeddings
 
-    def load_or_create_embeddings(self, documents:list[dict[str,Any]]) -> Tensor:
+    def load_or_create_embeddings(self, documents:list[dict[str,Any]]):
         self.documents = documents
         for doc in documents:
             self.document_map[doc["id"]] = doc
@@ -107,5 +117,87 @@ class SemanticSearch:
         out = []
         for item in scores[:limit]:
             out.append({"score":item[0],"title":item[1]["title"],"description":item[1]["description"]})
+
+        return out
+
+class ChunkedSemanticSearch(SemanticSearch):
+    def __init__(self, model_name = "all-MiniLM-L6-v2") -> None:
+        super().__init__(model_name)
+        self.chunk_embeddings = None
+        self.chunk_metadata = None
+        self.chunk_embeddings_path = os.path.join(CACHE_DIR, "chunk_embeddings.npy")
+        self.metadata_path = os.path.join(CACHE_DIR, "chunk_metadata.json")
+
+    def build_chunk_embeddings(self, documents:list[dict[str,Any]]):
+        self.documents = documents
+        movies = []
+        moveies_dict = []
+        for i,doc in enumerate(documents):
+            self.document_map[doc["id"]] = doc
+
+            if doc['description'].isspace():
+                continue
+            split_desc = chunker(doc['description'],4,1,True)
+            for j,desc_chunk in enumerate(split_desc):
+                movies.append(desc_chunk)
+                moveies_dict.append({"movie_idx":i,"chunk_idx":j,"total_chunks":len(split_desc)})
+
+        self.chunk_metadata = moveies_dict
+        self.chunk_embeddings = self.model.encode(movies,convert_to_numpy=True,show_progress_bar=True)
+        with open(self.chunk_embeddings_path,"wb") as f:
+            np.save(f,self.chunk_embeddings)
+
+        with open(self.metadata_path,"w") as f:
+            json.dump({"chunks": moveies_dict, "total_chunks": len(movies)}, f, indent=2)
+
+        return self.chunk_embeddings
+
+    def load_or_create_chunk_embeddings(self, documents: list[dict]) -> np.ndarray:
+        self.documents = documents
+        for doc in documents:
+            self.document_map[doc["id"]] = doc
+
+        if os.path.exists(self.chunk_embeddings_path) and os.path.exists(self.metadata_path):
+            with open(self.chunk_embeddings_path, "rb") as f:
+                self.chunk_embeddings = np.load(f)
+            with open(self.metadata_path,"r") as f:
+                self.chunk_metadata = json.load(f)['chunks']
+            return self.chunk_embeddings
+
+        return self.build_chunk_embeddings(documents)
+
+    def search_chunks(self, query: str, limit: int = 10):
+        if self.chunk_embeddings is None:
+            raise ValueError("Error Embeddings not loaded.`")
+        if self.chunk_metadata is None:
+            raise ValueError("Error Metadata not loaded.`")
+
+        scores_dict = []
+        q_emb = self.generate_embedding(query)
+
+        for i,e in enumerate(self.chunk_embeddings):
+            score = cosine_similarity(q_emb, e)
+            current_meta = self.chunk_metadata[i]
+            scores_dict.append({"chunk_idx":current_meta['chunk_idx'],
+                                "movie_idx":current_meta['movie_idx'],
+                                "score":score})
+
+        movie_x_scores = {}
+        for s in scores_dict:
+            if s['movie_idx'] in movie_x_scores and movie_x_scores[s['movie_idx']] >= s['score']:
+                continue
+            else:
+                movie_x_scores[s['movie_idx']] = s['score']
+
+        res = sorted(movie_x_scores.items(), key=lambda item: item[1], reverse=True)[:limit]
+        out = []
+        for item in res:
+            doc_id = item[0]
+            doc = self.documents[doc_id]
+            title = doc['title']
+            desc = doc['description']
+            score = item[1]
+            metadata = self.chunk_metadata[doc_id]
+            out.append(format_search_result(doc_id,title,desc,score,**metadata)) 
 
         return out
