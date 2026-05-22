@@ -42,12 +42,24 @@ def cosine_similarity(vec1, vec2):
     return dot_product / (norm1 * norm2)
 
 def chunker(text:str,size:int,overlap:int,semantic_flag:bool = False) -> list[str]:
+    text = text.strip()
+    if text == "":
+        return []
     if size == 0 or size - overlap <= 0:
         raise ValueError("Size or overlap value error.")
     if semantic_flag:
         tokens = re.split(r"(?<=[.!?])\s+",text)
+        if len(tokens) == 1:
+            if not tokens[0].endswith(('.','?','!')):
+                tokens = [text]
     else:
         tokens = text.split()
+    tk2 = []
+    for i in range(len(tokens)):
+        stripped_chunk = tokens[i].strip()
+        if stripped_chunk != "":
+            tk2.append(tokens[i])
+    tokens = [tokens[i].strip() for i in range (len(tokens))]
     sub_chunks = [tokens[i:i+size] for i in range(0, len(tokens),size - overlap)]
     if len(sub_chunks[len(sub_chunks)-1]) == overlap:
         sub_chunks = sub_chunks[:-1]
