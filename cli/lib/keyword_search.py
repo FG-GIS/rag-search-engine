@@ -127,7 +127,7 @@ class InvertedIndex:
     def bm25(self, doc_id:int, term:str) -> float:
         return self.get_bm25_idf(term) * self.get_bm25_tf(doc_id,term)
 
-    def bm25_search(self, query:str, limit:int) -> dict[int,float]:
+    def bm25_search(self, query:str, limit:int) -> list[dict[int,float]]:
         q_tkns = process_text(query)
         scores: dict[int,float] = {}
         for id in self.docmap:
@@ -135,8 +135,7 @@ class InvertedIndex:
             for q in q_tkns:
                 total += self.bm25(id, q)
             scores[id] = total
-        sorted_scores = dict(sorted(scores.items(), key=lambda item: item[1],reverse=True)[:limit])
-        return sorted_scores
+        return [dict(sorted(scores.items(), key=lambda item: item[1],reverse=True)[:limit])]
 
 
 

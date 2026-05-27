@@ -74,7 +74,7 @@ def main():
                 TITLE = r['title']
                 SCORE = r['score']
                 DOCUMENT = r['document']
-                print(f"\n{i}. {TITLE} (score: {SCORE:.4f})")
+                print(f"\n{i+1}. {TITLE} (score: {SCORE:.4f})")
                 print(f"   {DOCUMENT}...")
         case _:
             parser.print_help()
