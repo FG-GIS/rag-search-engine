@@ -3,7 +3,7 @@ import math
 import pickle
 import os
 from typing import Any, Counter
-from .search_utils import BM25_B, DEFAULT_SEARCH_LIMIT, CACHE_DIR, load_movies, load_stop_words, BM25_K1
+from .search_utils import BM25_B, DEFAULT_SEARCH_LIMIT, CACHE_DIR, format_search_result, load_movies, load_stop_words, BM25_K1,SearchResult
 from nltk.stem import PorterStemmer
 
 def search_command(query:str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
@@ -127,15 +127,26 @@ class InvertedIndex:
     def bm25(self, doc_id:int, term:str) -> float:
         return self.get_bm25_idf(term) * self.get_bm25_tf(doc_id,term)
 
-    def bm25_search(self, query:str, limit:int) -> list[dict[int,float]]:
+    def bm25_search(self, query:str, limit:int) -> list[SearchResult]:
         q_tkns = process_text(query)
         scores: dict[int,float] = {}
         for id in self.docmap:
-            total = 0
+            total = 0.0
             for q in q_tkns:
                 total += self.bm25(id, q)
             scores[id] = total
-        return [dict(sorted(scores.items(), key=lambda item: item[1],reverse=True)[:limit])]
+
+        sorted_scores = sorted(scores.items(), key=lambda item: item[1],reverse=True)[:limit]
+        results : list[SearchResult] = []
+        for id, score in sorted_scores:
+            doc = self.docmap[id]
+            results.append(format_search_result(
+                doc_id=doc["id"],
+                title=doc["title"],
+                document=doc["description"],
+                score=score,
+            ))
+        return results
 
 
 

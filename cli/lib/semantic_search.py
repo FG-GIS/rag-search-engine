@@ -1,4 +1,4 @@
-from .search_utils import CACHE_DIR, format_search_result,load_movies
+from .search_utils import CACHE_DIR, SearchResult, format_search_result,load_movies
 import re,json,os
 from sentence_transformers import SentenceTransformer
 import numpy as np
@@ -178,7 +178,7 @@ class ChunkedSemanticSearch(SemanticSearch):
 
         return self.build_chunk_embeddings(documents)
 
-    def search_chunks(self, query: str, limit: int = 10):
+    def search_chunks(self, query: str, limit: int = 10) -> list[SearchResult]:
         if self.chunk_embeddings is None:
             raise ValueError("Error Embeddings not loaded.`")
         if self.chunk_metadata is None:

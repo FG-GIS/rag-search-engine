@@ -77,12 +77,13 @@ def main() -> None:
         case "bm25search":
             idx = InvertedIndex()
             idx.load()
-            search = idx.bm25_search(args.query,args.limit)
-            for result in search:
-                cnt = 1
-                for id,score in result.items():
-                    print(f"{cnt}. ({id}) {idx.docmap[id]['title']} - Score: {score:.2f}")
-                    cnt += 1
+            res = idx.bm25_search(args.query,args.limit)
+            for i,r in enumerate(res):
+                TITLE = r['title']
+                SCORE = r['score']
+                DOCUMENT = r['document']
+                print(f"\n{i+1}. {TITLE} (score: {SCORE:.4f})")
+                print(f"   {DOCUMENT}...")
         case _:
             parser.print_help()
 

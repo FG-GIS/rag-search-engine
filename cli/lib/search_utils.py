@@ -1,6 +1,13 @@
 import json
 import os
-from typing import Any
+from typing import Any,TypedDict
+
+class SearchResult(TypedDict):
+    id: int
+    title: str
+    document: str
+    score: float
+    metadata: dict[str, Any]
 
 DEFAULT_SEARCH_LIMIT = 5
 
@@ -27,7 +34,7 @@ def load_stop_words() -> list[str]:
     # return data.splitlines()
 
 def format_search_result(
-    doc_id: int, title: str, document: str, score: float, **metadata: Any):
+    doc_id: int, title: str, document: str, score: float, **metadata: Any) -> SearchResult:
     """Create standardized search result
 
     Args:
