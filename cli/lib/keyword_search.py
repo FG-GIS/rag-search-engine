@@ -141,7 +141,7 @@ class InvertedIndex:
         for id, score in sorted_scores:
             doc = self.docmap[id]
             results.append(format_search_result(
-                doc_id=doc["id"],
+                doc_id=id,
                 title=doc["title"],
                 document=doc["description"],
                 score=score,

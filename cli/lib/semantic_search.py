@@ -204,8 +204,8 @@ class ChunkedSemanticSearch(SemanticSearch):
         res = sorted(movie_x_scores.items(), key=lambda item: item[1], reverse=True)[:limit]
         out = []
         for item in res:
-            doc_id = item[0]
-            doc = self.documents[doc_id]
+            doc = self.documents[item[0]]
+            doc_id = doc["id"]
             title = doc['title']
             desc = doc['description']
             score = item[1]

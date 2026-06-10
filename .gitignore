@@ -8,6 +8,7 @@ wheels/
 
 #Config files
 pyrightconfig.json
+gemini_key.env
 
 # Folders
 /data/

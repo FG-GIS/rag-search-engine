@@ -1,6 +1,7 @@
 import json
 import os
 from typing import Any,TypedDict
+from .gemini_wrap import query_gemma
 
 class SearchResult(TypedDict):
     id: int
@@ -54,3 +55,13 @@ def format_search_result(
         "score": round(score, SCORE_PRECISION),
         "metadata": metadata if metadata else {},
     }
+
+def enhance_query_spelling(query: str) -> str:
+    prompt = f"""Fix any spelling errors in the user-provided movie search query below.
+                        Correct only clear, high-confidence typos. Do not rewrite, add, remove, or reorder words.
+                        Preserve punctuation and capitalization unless a change is required for a typo fix.
+                        If there are no spelling errors, or if you're unsure, output the original query unchanged.
+                        Output only the final query text, nothing else.
+                        User query: "{query}"
+                        """
+    return query_gemma(prompt)
