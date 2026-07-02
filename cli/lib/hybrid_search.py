@@ -1,7 +1,6 @@
-import enum
 import os
 
-from lib.search_utils import SearchResult,format_search_result
+from lib.search_utils import SearchResult
 
 from .keyword_search import InvertedIndex
 from .semantic_search import ChunkedSemanticSearch
@@ -97,5 +96,4 @@ class HybridSearch:
 
 
         return sorted(rrf.values(), key=lambda item: item["rrf"], reverse=True)[:limit]
-        
 

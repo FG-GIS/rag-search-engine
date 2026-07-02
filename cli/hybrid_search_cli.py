@@ -1,5 +1,5 @@
 import argparse
-from lib.search_utils import load_movies,enhance_query_spelling
+from lib.search_utils import load_movies,enhance_query_spelling,rewrite_query,expand_query,rerank_results,batch_rerank_results,cross_encoding
 from lib.hybrid_search import normalize_scores,HybridSearch
 
 def main() -> None:
@@ -18,9 +18,12 @@ def main() -> None:
     rrf_search_parser.add_argument("query", type=str, help="Query that will be searched.")
     rrf_search_parser.add_argument("-k", type=int, default=60, help="K weight.")
     rrf_search_parser.add_argument("--limit", type=int, default=5, help="Limit the number of results.")
-    rrf_search_parser.add_argument("--enhance", type=str, choices=["spell"], help="Query enhancement method")
+    rrf_search_parser.add_argument("--enhance", type=str, choices=["spell","rewrite","expand"], help="Query enhancement method")
+    rrf_search_parser.add_argument("--rerank-method", type=str, choices=["individual","batch","cross_encoder"], help="Search enhancement method")
 
     args = parser.parse_args()
+
+    limit = args.limit
 
     match args.command:
         case "normalize":
@@ -35,12 +38,56 @@ def main() -> None:
         case "rrf-search":
             h_search = HybridSearch(load_movies())
             query = args.query
-            if args.enhance == "spell":
-                query = enhance_query_spelling(query)
-                print(f"Enhanced query ({args.enhance}): '{args.query}' -> '{query}'\n")
-            results = h_search.rrf_search(query,args.k,args.limit)
-            for i,r in enumerate(results):
-                print(f"{i+1}. {r["document"]["title"]}\nRRF Score: {r["rrf"]}\nBM25 Rank: {r["bm_25_rank"]}, Semantic Rank: {r["semantic_rank"]}\n{r["document"]["description"][:100]}")
+            match args.enhance:
+                case "spell":
+                    query = enhance_query_spelling(query)
+                    print(f"Enhanced query ({args.enhance}): '{args.query}' -> '{query}'\n")
+                case "rewrite":
+                    query = rewrite_query(query)
+                    print(f"Enhanced query ({args.enhance}): '{args.query}' -> '{query}'\n")
+                case "expand":
+                    query = expand_query(query)
+                    print(f"Enhanced query ({args.enhance}): '{args.query}' -> '{query}'\n")
+
+            match args.rerank_method:
+                case "individual" | "batch" | "cross_encoder":
+                    limit = limit * 5
+
+            results = h_search.rrf_search(args.query + " " + query,args.k,limit)
+
+            match args.rerank_method:
+                case "individual":
+                    results = rerank_results(query, results)[:args.limit]
+                    print(f"Re-ranking top {args.limit} results using {args.rerank_method} method...")
+                    print(f"Reciprocal Rank Fusion for '{args.query}' (k={args.k})")
+                    for i,r in enumerate(results):
+                        print(f"{i+1}. {r["document"]["title"]}\nRe-rank Score: {r["re_ranking"]}/10\nRRF Score: {r["rrf"]}\nBM25 Rank: {r["bm_25_rank"]}, Semantic Rank: {r["semantic_rank"]}\n{r["document"]["description"][:100]}")
+
+                case "batch":
+                    results = batch_rerank_results(query, results)[:args.limit]
+                    print(f"Re-ranking top {args.limit} results using {args.rerank_method} method...")
+                    print(f"Reciprocal Rank Fusion for '{args.query}' (k={args.k})")
+                    for i,r in enumerate(results):
+                        print(f"{i+1}. {r["document"]["title"]}\nRe-rank Rank: {r["batch_re_ranking"]}\nRRF Score: {r["rrf"]}\nBM25 Rank: {r["bm_25_rank"]}, Semantic Rank: {r["semantic_rank"]}\n{r["document"]["description"][:100]}")
+
+                case "cross_encoder":
+                    pairs = []
+                    for r in results:
+                        doc = r["document"]
+                        pairs.append([query, f"{doc.get('title', '')} - {doc.get('document', '')}"])
+                    cross_scores = cross_encoding(pairs).tolist()
+                    cross_results = []
+                    for i,r in enumerate( results ):
+                        r["cross_score"] = cross_scores[i] 
+                        cross_results.append(r)
+                    cross_results = sorted(cross_results, key= lambda item: item["cross_score"],reverse=True)[:args.limit]
+                    for i,r in enumerate(cross_results):
+                        print(f"{i+1}. {r["document"]["title"]}\nCross Encoder Score: {r["cross_score"]}\nRRF Score: {r["rrf"]}\nBM25 Rank: {r["bm_25_rank"]}, Semantic Rank: {r["semantic_rank"]}\n{r["document"]["description"][:100]}")
+
+
+                case _:
+                    for i,r in enumerate(results):
+                        print(f"{i+1}. {r["document"]["title"]}\nRRF Score: {r["rrf"]}\nBM25 Rank: {r["bm_25_rank"]}, Semantic Rank: {r["semantic_rank"]}\n{r["document"]["description"][:100]}")
         case _:
             parser.print_help()
 

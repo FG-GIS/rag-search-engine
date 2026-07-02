@@ -1,7 +1,8 @@
 import json
 import os
 from typing import Any,TypedDict
-from .gemini_wrap import query_gemma
+from sentence_transformers import CrossEncoder
+from .gemini_wrap import query_gemma,query_with_retry
 
 class SearchResult(TypedDict):
     id: int
@@ -16,6 +17,7 @@ DEFAULT_SEARCH_LIMIT = 5
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 DATA_PATH = os.path.join(PROJECT_ROOT,"data", "movies.json")
 STOP_WORDS_PATH = os.path.join(PROJECT_ROOT,"data", "stopwords.txt")
+GOLDEN_PATH = os.path.join(PROJECT_ROOT,"data", "golden_dataset.json")
 
 CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
 
@@ -65,3 +67,108 @@ def enhance_query_spelling(query: str) -> str:
                         User query: "{query}"
                         """
     return query_gemma(prompt)
+
+def rewrite_query(query: str) -> str:
+    prompt = f"""Rewrite the user-provided movie search query below to be more specific and searchable.
+
+                Consider:
+                - Common movie knowledge (famous actors, popular films)
+                - Genre conventions (horror = scary, animation = cartoon)
+                - Keep the rewritten query concise (under 10 words)
+                - It should be a Google-style search query, specific enough to yield relevant results
+                - Don't use boolean logic
+
+                Examples:
+                - "that bear movie where leo gets attacked" -> "The Revenant Leonardo DiCaprio bear attack"
+                - "movie about bear in london with marmalade" -> "Paddington London marmalade"
+                - "scary movie with bear from few years ago" -> "bear horror movie 2015-2020"
+
+                If you cannot improve the query, output the original unchanged.
+                Output only the rewritten query text, nothing else.
+
+                User query: "{query}"
+                """
+    return query_gemma(prompt)
+
+def expand_query(query: str) -> str:
+    prompt = f"""Expand the user-provided movie search query below with related terms.
+
+                Add synonyms and related concepts that might appear in movie descriptions.
+                Keep expansions relevant and focused.
+                Output only the additional terms; they will be appended to the original query.
+
+                Examples:
+                - "scary bear movie" -> "scary horror grizzly bear movie terrifying film"
+                - "action movie with bear" -> "action thriller bear chase fight adventure"
+                - "comedy with bear" -> "comedy funny bear humor lighthearted"
+
+                User query: "{query}"
+                """
+    return query_gemma(prompt)
+
+def rerank_results(query: str, results: list[dict]) -> list[dict]:
+    out : list = []
+    for r in results:
+        doc = r["document"]
+        prompt = f"""Rate how well this movie matches the search query.
+
+                    Query: "{query}"
+                    Movie: {doc.get("title", "")} - {doc.get("document", "")}
+
+                    Consider:
+                    - Direct relevance to query
+                    - User intent (what they're looking for)
+                    - Content appropriateness
+
+                    Rate 0-10 (10 = perfect match).
+                    Output ONLY the number in your response, no other text or explanation.
+
+                    Score:"""
+        r["re_ranking"] = query_with_retry(prompt,max_retries=10,wait=60)
+        out.append(r)
+    return sorted(out, key=lambda item: item["re_ranking"], reverse=True)
+
+def batch_rerank_results(query: str, results: list[dict]) -> list[dict]:
+    doc_list_str = ""
+    for r in results:
+        doc = r["document"]
+        doc_list_str += f"id:{doc["id"]},title:{doc["title"]},description:{doc["description"]};\n\n"
+
+    prompt = f"""Rank the movies listed below by relevance to the following search query.
+
+                Query: "{query}"
+
+                Movies:
+                {doc_list_str}
+
+                Return the movie IDs in order of relevance, best match first.
+
+                Your response must be a raw JSON array of integers.
+                Do not wrap the JSON in Markdown. Do not use a ```json code block.
+                Do not include any explanatory text.
+
+                For example:
+                [75, 12, 34, 2, 1]
+
+                Ranking:"""
+
+    rankings_str = query_with_retry(prompt,max_retries=5,wait=5)
+    if rankings_str == None:
+        rankings_str = ""
+
+    rankings_list = json.loads(rankings_str)
+
+    rankings_dict = {}
+
+    for score,id in enumerate(rankings_list, start=1):
+        rankings_dict[id] = score
+
+    out = []
+    for r in results:
+        r["batch_re_ranking"] = rankings_dict[r["document"]["id"]]
+        out.append(r)
+    return sorted(out,key= lambda item: item["batch_re_ranking"])
+
+def cross_encoding(pairs: list):
+    cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
+    return cross_encoder.predict(pairs)
