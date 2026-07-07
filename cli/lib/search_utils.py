@@ -172,3 +172,28 @@ def batch_rerank_results(query: str, results: list[dict]) -> list[dict]:
 def cross_encoding(pairs: list):
     cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
     return cross_encoder.predict(pairs)
+
+def evaluate_results(query: str, formatted_results: list[str]) -> list[int]:
+    prompt = f"""Rate how relevant each result is to this query on a 0-3 scale:
+
+Query: "{query}"
+
+Results:
+{"".join(formatted_results)}
+
+Scale:
+- 3: Highly relevant
+- 2: Relevant
+- 1: Marginally relevant
+- 0: Not relevant
+
+Do NOT give any numbers other than 0, 1, 2, or 3.
+
+Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+
+[2, 0, 3, 2, 0, 1]"""
+
+    scores_str = query_with_retry(prompt)
+    if scores_str is None:
+        scores_str = ""
+    return json.loads(scores_str)
