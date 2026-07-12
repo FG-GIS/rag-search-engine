@@ -68,7 +68,7 @@ class HybridSearch:
         return sorted(combined_data.values(),key=lambda d: d["hybrid"],reverse=True)[:limit]
 
 
-    def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
+    def rrf_search(self, query: str, k: int=60, limit: int = 10) -> list[dict]:
         bm_25_results = self._bm25_search(query,limit*500)
 
         semantic_results = self.semantic_search.search_chunks(query,limit*500)

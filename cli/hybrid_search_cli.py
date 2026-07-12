@@ -1,5 +1,5 @@
 import argparse
-from lib.search_utils import evaluate_results, load_movies,enhance_query_spelling,rewrite_query,expand_query,rerank_results,batch_rerank_results,cross_encoding.evaluate_results
+from lib.search_utils import evaluate_results, load_movies,enhance_query_spelling,rewrite_query,expand_query,rerank_results,batch_rerank_results,cross_encoding,evaluate_results
 from lib.hybrid_search import normalize_scores,HybridSearch
 
 def main() -> None:
@@ -20,7 +20,7 @@ def main() -> None:
     rrf_search_parser.add_argument("--limit", type=int, default=5, help="Limit the number of results.")
     rrf_search_parser.add_argument("--enhance", type=str, choices=["spell","rewrite","expand"], help="Query enhancement method")
     rrf_search_parser.add_argument("--rerank-method", type=str, choices=["individual","batch","cross_encoder"], help="Search enhancement method")
-    rrf_search_parser.add_argument("--evaluate", type=bool, help="Rate the search results")
+    rrf_search_parser.add_argument("--evaluate", action='store_true', help="Rate the search results")
     rrf_search_parser.add_argument("--debug", type=bool, help="Enable debug prints")
 
     args = parser.parse_args()
@@ -110,10 +110,10 @@ def main() -> None:
             if args.evaluate:
                 scores = evaluate_results(query, formatted_results)
                 for i in range(len(results)):
-                    ev_list.append("Title":{results[i]["document"]["title"],"Score":scores[i]})
+                    ev_list.append({"Title":results[i]["document"]["title"],"Score":scores[i]})
 
-                ev_list = sorted(ev_list,lambda item: item[1],reverse=True)
-                for i,r in enumerate(ev_list):
+                ev_list = sorted(ev_list,key= lambda item: item['Score'],reverse=True)
+                for i,r in enumerate(ev_list ,start=1):
                     print(f"{i}. {r["Title"]}: {r["Score"]}/3")
 
 

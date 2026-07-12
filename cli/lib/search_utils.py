@@ -197,3 +197,44 @@ Return ONLY the scores in the same order you were given the documents. Return a 
     if scores_str is None:
         scores_str = ""
     return json.loads(scores_str)
+
+def simple_query(query: str, results: list, type: str) -> str:
+    docs = ""
+    for e in results:
+        docs += e + "\n"
+
+    match type:
+        case "rag":
+            start_prompt = """You are a RAG agent for Hoopla, a movie streaming service.
+Your task is to provide a natural-language answer to the user's query based on documents retrieved during search.
+Provide a comprehensive answer that addresses the user's query.\n"""
+            docs_addr = "Documents"
+            ending = "Answer"
+
+        case "summary":
+            start_prompt = """Provide information useful to the query below by synthesizing data from multiple search results in detail.
+
+The goal is to provide comprehensive information so that users know what their options are.
+Your response should be information-dense and concise, with several key pieces of information about the genre, plot, etc. of each movie.
+
+This should be tailored to Hoopla users. Hoopla is a movie streaming service.\n"""
+            docs_addr = "Search results"
+            ending = "Provide a comprehensive 3–4 sentence answer that combines information from multiple sources"
+
+        case _:
+            start_prompt = ""
+            docs_addr = "Documents"
+            ending = "Answer"
+
+    prompt = f"""{start_prompt}
+Query: {query}
+
+{docs_addr}:
+{docs}
+
+{ending}:"""
+    response = query_with_retry(prompt)
+    if response is None:
+        response = ""
+    return response
+
