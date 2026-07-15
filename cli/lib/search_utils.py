@@ -1,8 +1,10 @@
 import json
 import os
+from time import sleep
 from typing import Any,TypedDict
 from sentence_transformers import CrossEncoder
-from .gemini_wrap import query_gemma,query_with_retry
+from .gemini_wrap import query_gemma
+from .openrouter_wrap import query_openrouter_free
 
 class SearchResult(TypedDict):
     id: int
@@ -58,15 +60,34 @@ def format_search_result(
         "metadata": metadata if metadata else {},
     }
 
+def query_with_retry(query: str, max_retries: int = 5 , wait: int = 3,api: str = "google"):
+    query_call = query_gemma
+
+    match api:
+        case "openrouter":
+            query_call = query_openrouter_free
+
+    for attempt in range(max_retries):
+        try:
+            return query_call(query)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = wait * (attempt + 1)
+                print(f"Server error, retrying in {wait_time} s... ({attempt + 1}/{max_retries})")
+                sleep(wait_time)
+            else:
+                raise e
+    return ""
+
 def enhance_query_spelling(query: str) -> str:
-    prompt = f"""Fix any spelling errors in the user-provided movie search query below.
-                        Correct only clear, high-confidence typos. Do not rewrite, add, remove, or reorder words.
-                        Preserve punctuation and capitalization unless a change is required for a typo fix.
-                        If there are no spelling errors, or if you're unsure, output the original query unchanged.
-                        Output only the final query text, nothing else.
-                        User query: "{query}"
-                        """
-    return query_gemma(prompt)
+    prompt: str = f"""Fix any spelling errors in the user-provided movie search query below.
+Correct only clear, high-confidence typos. Do not rewrite, add, remove, or reorder words.
+Preserve punctuation and capitalization unless a change is required for a typo fix.
+If there are no spelling errors, or if you're unsure, output the original query unchanged.
+Output only the final query text, nothing else.
+User query: "{query}"
+"""
+    return query_with_retry(prompt)
 
 def rewrite_query(query: str) -> str:
     prompt = f"""Rewrite the user-provided movie search query below to be more specific and searchable.
@@ -88,7 +109,7 @@ def rewrite_query(query: str) -> str:
 
                 User query: "{query}"
                 """
-    return query_gemma(prompt)
+    return query_with_retry(prompt)
 
 def expand_query(query: str) -> str:
     prompt = f"""Expand the user-provided movie search query below with related terms.
@@ -104,7 +125,7 @@ def expand_query(query: str) -> str:
 
                 User query: "{query}"
                 """
-    return query_gemma(prompt)
+    return query_with_retry(prompt)
 
 def rerank_results(query: str, results: list[dict]) -> list[dict]:
     out : list = []
@@ -203,13 +224,16 @@ def simple_query(query: str, results: list, type: str) -> str:
     for e in results:
         docs += e + "\n"
 
+    start_prompt = ""
+    query_addr = "Query"
+    docs_addr = "Documents"
+    ending = "Answer"
+
     match type:
         case "rag":
             start_prompt = """You are a RAG agent for Hoopla, a movie streaming service.
 Your task is to provide a natural-language answer to the user's query based on documents retrieved during search.
 Provide a comprehensive answer that addresses the user's query.\n"""
-            docs_addr = "Documents"
-            ending = "Answer"
 
         case "summary":
             start_prompt = """Provide information useful to the query below by synthesizing data from multiple search results in detail.
@@ -221,13 +245,34 @@ This should be tailored to Hoopla users. Hoopla is a movie streaming service.\n"
             docs_addr = "Search results"
             ending = "Provide a comprehensive 3–4 sentence answer that combines information from multiple sources"
 
-        case _:
-            start_prompt = ""
-            docs_addr = "Documents"
-            ending = "Answer"
+        case "citations":
+            start_prompt = """Answer the query below and give information based on the provided documents.
+
+The answer should be tailored to users of Hoopla, a movie streaming service.
+If not enough information is available to provide a good answer, say so, but give the best answer possible while citing the sources available.\n
+"""
+            ending = """Instructions:
+- Provide a comprehensive answer that addresses the query
+- Cite sources in the format [1], [2], etc. when referencing information
+- If sources disagree, mention the different viewpoints
+- If the answer isn't in the provided documents, say "I don't have enough information"
+- Be direct and informative
+
+Answer"""
+
+        case "question":
+            start_prompt = "Answer the user's question based on the provided movies that are available on Hoopla, a streaming service.\n"
+            query_addr = "Question"
+            ending = """Instructions:
+- Answer questions directly, concisely and thoroughly
+- Be casual and conversational
+- Don't be cringe or hype-y
+- Talk like a normal person would in a chat conversation
+
+Answer"""
 
     prompt = f"""{start_prompt}
-Query: {query}
+{query_addr}: {query}
 
 {docs_addr}:
 {docs}
